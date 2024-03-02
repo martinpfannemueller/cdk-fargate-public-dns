@@ -22,7 +22,7 @@ def find_eni_id(event):
     raise Exception("Unable to locate attached ENI")
 
 
-def update_dns(public_ip, hosted_zone, domain_name, assumed_role=None):
+def update_dns(public_ipv4, public_ipv6, hosted_zone, domain_name, assumed_role=None):
 
     r53 = boto3.client("route53")
 
@@ -51,7 +51,24 @@ def update_dns(public_ip, hosted_zone, domain_name, assumed_role=None):
                         "Name": domain_name,
                         "Type": "A",
                         "TTL": 300,
-                        "ResourceRecords": [{"Value": public_ip}],
+                        "ResourceRecords": [{"Value": public_ipv4}],
+                    },
+                }
+            ]
+        },
+    )
+
+    r53.change_resource_record_sets(
+        HostedZoneId=hosted_zone,
+        ChangeBatch={
+            "Changes": [
+                {
+                    "Action": "UPSERT",
+                    "ResourceRecordSet": {
+                        "Name": domain_name,
+                        "Type": "AAAA",
+                        "TTL": 300,
+                        "ResourceRecords": [{"Value": public_ipv6}],
                     },
                 }
             ]
@@ -65,8 +82,9 @@ def handler(event, context):
 
     ec2 = boto3.resource("ec2")
     eni = ec2.NetworkInterface(eni_id)
-    public_id = eni.association_attribute["PublicIp"]
+    public_ipv4 = eni.association_attribute["PublicIp"]
+    public_ipv6 = eni.ipv6_address
 
-    update_dns(public_id, hosted_zone, domain_name, assumed_role)
+    update_dns(public_ipv4, public_ipv6, hosted_zone, domain_name, assumed_role)
 
     return True
